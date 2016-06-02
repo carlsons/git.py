@@ -1,0 +1,5 @@
+g.py
+git/commands/diff.py
+git/commands/status.py
+git/__init__.py
+git/commands/__init__.py
