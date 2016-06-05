@@ -17,13 +17,31 @@ class DiffCommand( git.Command ):
    def __init__( self ):
       super( DiffCommand, self ).__init__( command_name )
 
-   def process( self, args ):
-      print "processing the git %s command..." % ( self.command_name )
-      print args
+   def get_command_parser( self, parent_parser ):
 
-   def show_help( self, args ):
-      print "help for the git %s command..." % ( self.command_name )
-      print args
+      parser = super( DiffCommand, self ).get_command_parser( parent_parser )
 
-git.register_command( 'diff', DiffCommand() )
+      parser.add_argument(
+         '-w',
+         help              =  'ignore whitespace',
+         default           =  False,
+         action            =  'store_const', const=True
+         )
+
+      return parser
+
+   def process( self, parent_parsers, args ):
+      # print "processing the git %s command..." % ( self.command_name )
+
+      pass
+
+   def show_help( self, parent_parsers, args ):
+      # print "help for the git %s command..." % ( self.command_name )
+
+      parser = self.get_command_parser( parent_parsers[ 'global' ] )
+      ignore = parser.parse_args( [ '-h' ] )
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+git.register_command( command_name, DiffCommand() )
 

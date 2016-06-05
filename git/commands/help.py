@@ -6,6 +6,8 @@
 
 # print "importing git.commands.help module"
 
+import exceptions
+
 import git
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -17,23 +19,24 @@ class HelpCommand( git.Command ):
    def __init__( self ):
       super( HelpCommand, self ).__init__( command_name )
 
-   def process( self, args ):
-
-      print "processing the git %s command..." % ( self.command_name )
-      print args
+   def process( self, parent_parsers, args ):
+      # print "processing the git %s command..." % ( self.command_name )
 
       if len( args.options ) == 0:
-         raise exceptions.RuntimeError, "command not specified"
+         ignore = parent_parsers[ 'cmdline' ].parse_args( [ '-h' ] )
 
       elif not git.supported_cmdlist.has_key( args.options[0] ):
          raise exceptions.RuntimeError, "command not supported: " + args.options[0]
 
       else:
-         git.supported_cmdlist[ args.options[0] ].show_help( args )
+         git.supported_cmdlist[ args.options[0] ].show_help( parent_parsers, args )
 
-   def show_help( self, args ):
-      print "help for the git %s command..." % ( self.command_name )
-      print args
+   def show_help( self, parent_parsers, args ):
+      # print "help for the git %s command..." % ( self.command_name )
 
-git.register_command( 'help', HelpCommand() )
+      pass
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+git.register_command( command_name, HelpCommand() )
 
