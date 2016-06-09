@@ -24,7 +24,7 @@ class StatusCommand( git.Command ):
       parser.add_argument(
          '-s', '--short',
          help              =  'show short status',
-         default           =  False,
+         default           =  None,
          action            =  'store_const', const=True
          )
 
@@ -32,6 +32,11 @@ class StatusCommand( git.Command ):
 
    def process( self, parent_parsers, args ):
       # print "processing the git %s command..." % ( self.command_name )
+
+      super( StatusCommand, self ).process( parent_parsers, args )
+
+      print 'args  = ' + repr( self.args )
+      print "processing the git '%s' command for repo '%s'" % ( self.command_name, args.root )
 
       pass
 

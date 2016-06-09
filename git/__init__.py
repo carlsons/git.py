@@ -64,21 +64,21 @@ def get_parsers():
    global_parser.add_argument(
       '-v', '--verbose',
       help              =  'enable verbose mode',
-      default           =  False,
+      default           =  None,
       action            =  'store_const', const=True
       )
 
    global_parser.add_argument(
       '--debug',
       help              =  'enable debug mode',
-      default           =  False,
+      default           =  None,
       action            =  'store_const', const=True
       )
 
    global_parser.add_argument(
       '--root',
       help              =  'specify the root directory of the Git repository',
-      default           =  os.getcwd(),
+      default           =  None,
       action            =  'store'
       )
 
@@ -92,7 +92,7 @@ def get_parsers():
       help              =  'command to execute',
       nargs             =  '?',
       choices           =  global_cmdlist.keys() + supported_cmdlist.keys(),
-      default           =  'status',
+      default           =  None,
       action            =  'store'
       )
 
@@ -103,6 +103,20 @@ def get_parsers():
       )
 
    return ( { 'global' : global_parser, 'cmdline' : cmdline_parser } )
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+# child wins 
+def merge_dict( parent, child ):
+
+   merged = {}
+   for k in set( parent.keys() + child.keys() ):
+      if child.get( k, None ) is None:
+         merged[ k ] = parent.get( k, None )
+      else:
+         merged[ k ] = child.get( k )
+
+   return merged
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -124,9 +138,16 @@ class Command( object ):
          help              =  'command to execute',
          nargs             =  '?',
          choices           =  [ self.command_name ],
-         default           =  'status',
+         default           =  None,
          action            =  'store'
          )
 
       return parser
+
+   def process( self, parent_parsers, args ):
+      assert args.command == self.command_name
+
+      parser      = self.get_command_parser( parent_parsers[ 'global' ] )
+      my_args     = parser.parse_args( args.options )
+      self.args   = merge_dict( args.__dict__, my_args.__dict__ )
 
