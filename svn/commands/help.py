@@ -4,12 +4,12 @@
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-# print "importing git.commands.help module"
+# print "importing svn.commands.help module"
 
 import exceptions
 
 import scm
-import git
+import svn
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -21,24 +21,24 @@ class HelpCommand( scm.Command ):
       super( HelpCommand, self ).__init__( command_name )
 
    def process( self, parent_parsers, args ):
-      # print "processing the git %s command..." % ( self.command_name )
+      # print "processing the svn %s command..." % ( self.command_name )
 
       if len( args.options ) == 0:
          ignore = parent_parsers[ 'cmdline' ].parse_args( [ '-h' ] )
 
-      elif not git.supported_cmdlist.has_key( args.options[0] ):
+      elif not svn.supported_cmdlist.has_key( args.options[0] ):
          raise exceptions.RuntimeError, "command not supported: " + args.options[0]
 
       else:
-         git.supported_cmdlist[ args.options[0] ].show_help( parent_parsers, args )
+         svn.supported_cmdlist[ args.options[0] ].show_help( parent_parsers, args )
 
    def show_help( self, parent_parsers, args ):
-      print "help for the git %s command..." % ( self.command_name )
+      # print "help for the svn %s command..." % ( self.command_name )
 
       pass
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-git.register_command( command_name, HelpCommand() )
+svn.register_command( command_name, HelpCommand() )
 import scm
 

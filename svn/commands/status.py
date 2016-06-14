@@ -4,10 +4,10 @@
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-# print "importing git.commands.status module"
+# print "importing svn.commands.status module"
 
 import scm
-import git
+import svn
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -32,22 +32,22 @@ class StatusCommand( scm.Command ):
       return parser
 
    def process( self, parent_parsers, args ):
-      # print "processing the git %s command..." % ( self.command_name )
+      # print "processing the svn %s command..." % ( self.command_name )
 
       super( StatusCommand, self ).process( parent_parsers, args )
 
       print 'args  = ' + repr( self.args )
-      print "processing the git '%s' command for repo '%s'" % ( self.command_name, args.root )
+      print "processing the svn '%s' command for repo '%s'" % ( self.command_name, args.root )
 
       pass
 
    def show_help( self, parent_parsers, args ):
-      print "help for the git %s command..." % ( self.command_name )
+      # print "help for the svn %s command..." % ( self.command_name )
 
       parser = self.get_command_parser( parent_parsers[ 'root' ] )
       ignore = parser.parse_args( [ '-h' ] )
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-git.register_command( command_name, StatusCommand() )
+svn.register_command( command_name, StatusCommand() )
 

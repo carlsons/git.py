@@ -4,10 +4,10 @@
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-# print "importing git.commands.diff module"
+# print "importing svn.commands.diff module"
 
 import scm
-import git
+import svn
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -32,17 +32,17 @@ class DiffCommand( scm.Command ):
       return parser
 
    def process( self, parent_parsers, args ):
-      # print "processing the git %s command..." % ( self.command_name )
+      # print "processing the svn %s command..." % ( self.command_name )
 
       pass
 
    def show_help( self, parent_parsers, args ):
-      # print "help for the git %s command..." % ( self.command_name )
+      # print "help for the svn %s command..." % ( self.command_name )
 
       parser = self.get_command_parser( parent_parsers[ 'root' ] )
       ignore = parser.parse_args( [ '-h' ] )
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-git.register_command( command_name, DiffCommand() )
+svn.register_command( command_name, DiffCommand() )
 

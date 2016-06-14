@@ -1,12 +1,12 @@
 #! /usr/bin/python
 
-'''Git package'''
+'''Subversion package'''
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-# print "importing git package"
+# print "importing svn package"
 
-_MetaDir             = '.git'
+_MetaDir             = '.svn'
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -18,11 +18,13 @@ def register_command( command_name, handler ):
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-# functions for finding and testing the existence of a Git repo
+# functions for finding and testing the existence of a Subversion repo
 
 def isRepo( path=None ):
    path = mungeDir( path )
-   return hasDir( path, _MetaDir )
+   if hasDir( path, _MetaDir ):
+      return not hasDir( getParentDir( path ), _MetaDir )
+   return False
 
 def findRepo( path=None ):
    return findDir( path, isRepo, None );
