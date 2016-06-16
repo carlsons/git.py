@@ -6,6 +6,7 @@
 
 # print "importing scm package"
 
+import os
 import argparse
 
 # TODO: do we want to import into this namespace?
@@ -159,4 +160,55 @@ class Command( object ):
       parser      = self.get_command_parser( parent_parsers[ 'global' ] )
       my_args     = parser.parse_args( args.options )
       self.args   = merge_dict( args.__dict__, my_args.__dict__ )
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+class Repo:
+
+   def __init__( self, scm_type, path ):
+      check_dir_exists( path )
+      # set the data members
+      self.scm_type        = scm_type
+      self.path            = path
+      self.cwd             = os.getcwd()
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+import git
+import svn
+
+def find_repos( path=None ):
+
+   g = git.find_repo( path )
+   s = svn.find_repo( path )
+
+   r = { 'git' : g, 'svn' : s }
+
+   f = []
+
+   t = None
+
+   if    not g and not s:
+
+      pass
+
+   elif      g and not s:
+
+      t = 'git'
+      f.append( g )
+
+   elif  not g and     s:
+
+      t = 'svn'
+      f.append( s )
+
+   else:
+
+      t = 'both'
+      f.extend([  g, s ] )
+
+   r[ 'type'  ] = t
+   r[ 'found' ] = f
+
+   return r
 

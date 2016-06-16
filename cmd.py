@@ -30,14 +30,14 @@ dumpit( 'script_base' )
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-import svn
+dirs = [ '/home/carlsons/sandbox/svn-mirror/work/conf', '/home/carlsons/sandbox/git.py/git/commands' ]
 
-print svn.findRepo( '/home/carlsons/sandbox/svn-mirror/work/conf' )
+import scm
 
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+repos = scm.find_repos()
 
-import git
+print repos
 
-print git.findRepo( '/home/carlsons/sandbox/git.py/git/commands' )
-
+for r in repos[ 'found' ]:
+   print r.__dict__
 

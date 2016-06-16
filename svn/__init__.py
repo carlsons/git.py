@@ -6,7 +6,12 @@
 
 # print "importing svn package"
 
+_Type                = 'svn'
 _MetaDir             = '.svn'
+
+import scm
+
+from common import *
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -20,12 +25,22 @@ def register_command( command_name, handler ):
 
 # functions for finding and testing the existence of a Subversion repo
 
-def isRepo( path=None ):
-   path = mungeDir( path )
-   if hasDir( path, _MetaDir ):
-      return not hasDir( getParentDir( path ), _MetaDir )
+def is_repo( path=None ):
+   path = munge_dir( path )
+   if has_dir( path, _MetaDir ):
+      return not has_dir( get_parent_dir( path ), _MetaDir )
    return False
 
-def findRepo( path=None ):
-   return findDir( path, isRepo, None );
+def find_repo_root( path=None ):
+   return find_dir( path, is_repo, None );
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+# TODO: need a derived class for this scm
+
+def find_repo( path=None ):
+   root = find_repo_root( path )
+   if root:
+      return scm.Repo( _Type, root )
+   return None
 
