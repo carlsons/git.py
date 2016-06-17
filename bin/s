@@ -1,0 +1,442 @@
+#! /usr/bin/zsh
+SCRIPT_VERSION="1.8-2015.11.05-01"
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+# set the global environment
+
+CURRENT_DIR="$PWD"
+
+SCRIPT="$0"
+SCRIPT_BASENAME="$( basename $0 )"
+SCRIPT_PATHNAME="$( dirname  $0 )"
+SCRIPT_PID=$$
+
+SCRIPT_INCLUDE="${SCRIPT_PATHNAME}/svn-functions.inc"
+
+RUN_DATE=$(date +%Y.%m.%d-%a-%H.%M.%S-%Z)
+
+VERBOSE='false'
+DEBUG='false'
+DRYRUN='false'
+COLORS='true'
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+SERVER_SVN_FQDN="raptor-ccm04-lx01-svn.us.rdlabs.hpecorp.net"
+
+if [[ -e /etc/hostnames.conf ]]; then
+   . /etc/hostnames.conf   include
+elif [[ -e $HOME/.hostnames.conf ]]; then
+   . $HOME/.hostnames.conf include
+fi
+
+REPO_HOST="$SERVER_SVN_FQDN"
+REPO_ROOT="svn://${REPO_HOST}"
+REPO_NAME="raptor"
+REPO_TLD=""
+REPO_URL=""
+
+SVN_ARGS=()
+
+if [[ -e /etc/svn-wrapper.conf ]]; then
+   . /etc/svn-wrapper.conf
+elif [[ -e $HOME/.svn-wrapper.conf ]]; then
+   . $HOME/.svn-wrapper.conf
+fi
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+# standard help message
+usage()
+{
+cat <<- EOF
+	usage: ${SCRIPT_BASENAME} [options [...]] command [args]
+	Subversion wrapper script, version ${SCRIPT_VERSION}
+
+	   options:
+
+	      -h|--help         : this text
+	      --version         : script version
+
+	      --verbose         : show detail while processing
+	      --debug           : show detail while processing
+	      --dry-run         : show what will be done (no changes applied)
+	      -n|--no-colors    : remove colorization
+
+	      -r|--repo=NAME    : select repository for list/log commands,
+	                        : where name is ( raptor, tools or docs)
+	      -t|--trunk        : select trunk for list/log commands
+	      -b|--branch(es)   : select branches for list/log commands
+	      --tag(s)          : select tags for list/log command
+
+
+	   commands:
+
+	      help              : same as -h
+
+	      status            : augmented 'svn status'      (abbrev: stat)
+	      lsmod             : list modified files
+	                          (not untracked or added)
+	      lsc|conflict      : show text conflicts
+	      ignore            : show the ignore property    (abbrev: ig)
+
+	      mergeinfo         : augmented 'svn mergeinfo'   (abbrev: mi)
+	      mergetest         : checks mergeinfo            (abbrev: mt)
+	                        : returns:
+	                           3 - if merginfo is not configured (no .mergeinfo.conf)
+	                           2 - if a merge is blocked
+	                           1 - if a merge is not needed
+	                           success (0) - if a merge is needed
+	      merge             : svn merge using .mergeinfo.conf
+	      mcommit           : commit an SVN merge         (abbrev: mc)
+
+	   direct commands:       (these operate on the repository directly)
+
+	      list              : augmented 'svn list'        (abbrev: ls)
+	      log               : augmented 'svn log'
+	      xdiff             : augmented 'svn diff'        (abbrev: xd)
+
+	   pass-thru commands:
+
+	      checkout, co, diff, update
+
+	   log options:
+	      -l COUNT          : limit number of entries returned
+	      -x|--xml          : output XML
+	      --rev REV         : the revision to log
+
+	   xdiff options:
+	      -c REV            : the revision to diff
+
+	   .mergeinfo.conf:
+
+	      this file defines where to merge from; create it in the root of
+	      your checkout and define the following variable (replacing the
+	      value accordingly):
+
+	         MERGE_FROM_URL='svn://raptor-lx01-svn.usa.hp.com/raptor/trunk'
+
+EOF
+}
+
+show_version()
+{
+cat <<- EOF
+	${SCRIPT_BASENAME}: Subversion wrapper script, version ${SCRIPT_VERSION}
+EOF
+}
+
+# emit error messages
+barf()
+{
+cat 1>&2 <<- EOF
+	${SCRIPT_BASENAME}: $@
+EOF
+}
+
+# modified barf command
+barf_and_die()
+{
+cat 1>&2 <<- EOF
+	${SCRIPT_BASENAME}: $@
+EOF
+exit 1
+}
+
+bomb()
+{
+   $DEBUG && barf "!BOMB! (exit=$1)"
+   exit $1
+}
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+if [ ! -e $SCRIPT_INCLUDE ]; then
+   barf "can't find required functions '$SCRIPT_INCLUDE'"
+   bomb 9
+fi
+
+. $SCRIPT_INCLUDE
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+# parse the arguments and test the result
+_OPTIONS=`getopt -o hvnr:btl:xc: --long help,version,verbose,debug,dry-run,no-colors,tag,tags,branch,branches,trunk,repo:,xml,rev: -n "${SCRIPT_BASENAME}" -- "$@"`
+if [ $? != 0 ] ; then bomb 7 ; fi
+# reset the arguments
+eval set -- "${_OPTIONS}"
+
+while true ; do
+   case "$1" in
+
+      -h|--help)        usage ; bomb 1 ;;
+      --version)        show_version ; bomb 1 ;;
+
+      -v|--verbose)     VERBOSE='true';         shift;         ;;
+      --debug)          DEBUG='true';           shift;         ;;
+      --dry-run)        DRYRUN='true';          shift;         ;;
+
+      -n|--no-colors)   COLORS='false';         shift;         ;;
+
+      -r|--repo)
+         REPO_NAME=$2
+         shift 2
+         ;;
+
+      -t|--trunk)       REPO_TLD='/trunk';      shift          ;;
+      -b|--branch*)     REPO_TLD='/branches';   shift          ;;
+      --tag*)           REPO_TLD='/tags';       shift          ;;
+
+      -l)
+         SVN_ARGS+=( -l $2 )
+         shift 2
+      ;;
+
+      -x|--xml)
+         SVN_ARGS+=( --xml )
+         FORMAT_XML='true'
+         shift
+      ;;
+
+      -c)
+         SVN_ARGS+=( -c $2 )
+         shift 2
+      ;;
+
+      --rev)
+         SVN_ARGS+=( -r $2 )
+         shift 2
+      ;;
+
+
+      --)                                       shift;  break  ;;
+      *)                                                break  ;;
+   esac
+done
+
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+# call the function to initialize the text strings used by this script
+init_text
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+# check to make sure a command has been specified
+
+if [ $# -eq 0 ]; then
+   COMMAND='status'
+else
+   COMMAND=${1}
+   shift
+fi
+
+# process the command
+
+case ${(L)COMMAND} in
+
+   help)
+      usage
+      bomb 1
+   ;;
+
+   st*)
+      svn_status
+      exit
+   ;;
+
+   lsmod)
+      svn_get_modified_file_names
+   ;;
+
+   lsc*|conflict*)
+      svn_get_conflict_file_names
+   ;;
+
+   ig*)
+      svn propget svn:ignore .
+   ;;
+
+   resolve)
+      confirm_action "resolve with working version: $@"
+      svn resolve --accept working $@
+   ;;
+
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+   # merge commands
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+   mergeinfo|mi)
+      svn_mergeinfo
+      exit
+   ;;
+
+   mergetest|mt|test)
+      svn_merge_test
+      bomb $?
+   ;;
+
+   merge)
+
+      svn_merge_test
+      RC=$?
+
+      if   [ $RC -eq 3 ]; then
+         barf "merge is $TEXT_NOT_CONFIG"
+      elif [ $RC -eq 2 ]; then
+         barf "merge is $TEXT_BLOCKED; required actions: $MERGE_BLOCKS"
+      elif [ $RC -eq 1 ]; then
+         barf "merge is *NOT* needed at this time"
+      elif [ $RC -ne 0 ]; then
+         barf "UNKNOWN STATUS (RC=$RC)"
+      else
+
+         if $DRYRUN || $DEBUG ; then
+            # call the helper; it handles $DRYRUN and $DEBUG accordingly
+            svn_merge
+         else
+
+            # otherwise, a merge is needed and requested, so confirm; this
+            # function exit if the user doesn't confirm the action
+            confirm_action "merge $MERGE_CNT revision(s) from $MERGE_FROM_URL"
+
+            # process the merge and output the result to a text file
+            {
+               # and call the helper method (handles debug and dry-run options
+               svn_merge
+            } 2>&1 | tee changes-$RUN_DATE-merge.txt
+
+         fi
+      fi
+
+   ;;
+
+   # mcommit - this is a "merge commit" used to commit changes to Subversion
+   # that were merged from another branch
+   mc*)
+
+      # validate the command line parameter(s)
+      if [ $# -eq 0 ]; then
+         barf "specify the merge log file"
+         bomb 7
+      fi
+
+      # validate and initialize the operating environment
+      svn_check_dir           # barfs and exists if $PWD is not a working directory
+      svn_goto_root           # climbs the directory tree to the root of this checkout
+
+      # find out whether there are any pending changes
+      MODIFIED_CNT=$( svn_get_modified_cnt )
+      # and die if nothings pending
+      if [ $MODIFIED_CNT -eq 0 ]; then
+         barf "no changes pending"
+         $DEBUG || bomb 1
+      fi
+
+      # define a temporary file where we'll stuff the log information
+      COMMIT_MSG_SPEC="/tmp/${SCRIPT_BASENAME}-${SCRIPT_PID}.log"
+      if [ -e $COMMIT_MSG_SPEC ]; then
+         barf "temp file exists '$COMMIT_MSG_SPEC'"
+         bomb 8
+      fi
+      # and compose the commit message
+      cat $1 | svn_format_mergelog > $COMMIT_MSG_SPEC
+
+      # process the request
+
+      # show the commit message we're going to use
+      echo "Commit Message:"
+      {
+         # show the commit message
+         show_sep
+         cat $COMMIT_MSG_SPEC
+         show_sep
+      }  | indent_text
+      echo "" # then a blank line
+
+      if $DRYRUN || $DEBUG ; then
+         # and call the helper; it handles $DRYRUN and $DEBUG accordingly
+         svn_commit $COMMIT_MSG_SPEC
+      else
+
+         # otherwise, a merge is needed and requested, so confirm; this
+         # function exit if the user doesn't confirm the action
+         confirm_action "commit merged changes to $MODIFIED_CNT files"
+
+         # and call the helper method to commit the changes
+         svn_commit $COMMIT_MSG_SPEC
+
+      fi
+
+      # and clean up the commit message
+      [ -e $COMMIT_MSG_SPEC ] && rm $COMMIT_MSG_SPEC
+
+   ;;
+
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+   # direct commands - these operate on the repository directly; don't rely on
+   # the working directory
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+   list|ls)
+      # set the URL for the selected target
+      set_url $REPO_NAME
+      # generate the list
+      $VERBOSE && SVN_ARGS+=( -v )
+      $DEBUG && printf "url: %s\n" ${REPO_URL}${REPO_TLD}/$@
+      svn list                      \
+         ${SVN_ARGS}                \
+         ${REPO_URL}${REPO_TLD}/$@
+   ;;
+
+   log)
+      # set the URL for the selected target
+      set_url $REPO_NAME
+      # generate the list
+      $VERBOSE && SVN_ARGS+=( -v )
+      $DEBUG && printf "url: %s\n" ${REPO_URL}${REPO_TLD}/$@
+      svn log                       \
+         ${SVN_ARGS}                \
+         ${REPO_URL}${REPO_TLD}/$@
+   ;;
+
+   xd*)
+      # set the URL for the selected target
+      set_url $REPO_NAME
+      # generate the list
+      $DEBUG && printf "url: %s\n" ${REPO_URL}${REPO_TLD}/$@
+      svn diff                      \
+         ${SVN_ARGS}                \
+         ${REPO_URL}${REPO_TLD}/$@
+   ;;
+
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+   # pass through commands
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+   checkout|co)
+      svn checkout $@
+   ;;
+
+   d*)
+      svn diff $@
+   ;;
+
+   update)
+      svn update $@
+   ;;
+
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+   # error
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+   *)
+      barf "command '$COMMAND' unrecognized"
+      bomb 7
+   ;;
+
+esac
+
+
+# vim: syntax=sh

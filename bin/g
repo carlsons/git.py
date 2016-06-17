@@ -1,0 +1,549 @@
+#! /usr/bin/zsh
+SCRIPT_VERSION="1.16-2016.06.17-01"
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+# set the global environment
+
+CURRENT_DIR="$PWD"
+
+SCRIPT="$0"
+SCRIPT_BASENAME="$( basename $0 )"
+SCRIPT_PATHNAME="$( dirname  $0 )"
+SCRIPT_PID=$$
+
+SCRIPT_INCLUDE="${SCRIPT_PATHNAME}/git-functions.inc"
+
+RUN_DATE=$(date +%Y.%m.%d-%a-%H.%M.%S-%Z)
+
+VERBOSE='false'
+DEBUG='false'
+DRYRUN='false'
+COLORS='true'
+PULLPUSH='false'
+SHORT='false'
+
+GIT_COMMIT_MODE=''
+
+if [[ -e /etc/git-wrapper.conf ]]; then
+   . /etc/git-wrapper.conf
+elif [[ -e $HOME/.git-wrapper.conf ]]; then
+   . $HOME/.git-wrapper.conf
+fi
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+# standard help message
+usage()
+{
+cat <<- EOF
+	usage: ${SCRIPT_BASENAME} [options [...]] command [args]
+	Git wrapper script, version ${SCRIPT_VERSION}
+
+	   options:
+
+	      -h|--help         : this text
+	      --version         : script version
+
+	      --verbose         : show detail while processing
+	      --debug           : show detail while processing
+	      --dry-run         : show what will be done (no changes applied)
+	      -n|--no-colors    : remove colorization
+
+	      -s                : synonym for 'g short'
+	      -p                : add a pull/push operation to xstatus command;
+	                        : implies xstatus, if not otherwise specified
+
+	      -d                : shortcut for mkdiff command
+
+	   commands:
+
+	      help              : same as -h
+
+	      branch            : show branches,                    (abbrev: b)
+	                        : add -v to show all
+	      remotes           : show branches and their remotes
+
+	      status            : augmented 'git status'            (abbrev: stat)
+	      short             : synonym for 'git status --short'
+	      ucommit           : commit an SVN update              (abbrev: uc)
+	      mcommit           : commit an SVN merge               (abbrev: mc)
+
+	      pp                : does a pull and then a push; when verbose
+	                        : it also shows the current status
+
+	      stash             : augmented 'git stash', default: 'list'
+
+	      lsall             : list all modified files (incl. staged)
+	      lsmod             : list modified files (not untracked or added)
+	      lsdel             : list deleted files
+
+	      log               : show a oneline log
+	      graph             : show a log graph
+
+	      xstatus           : extended status                   (abbrev: xs)
+
+	      master|home       : checkout the master branch or your 'home'
+	                        : branch (see .mergeinfo.conf below)
+
+	      mkdiff            : save diff to diff.txt (overwrite if necessary)
+
+	      snapshot          : create a patch file               (abbrev: snap)
+	      mkpatch           : create patch/revnote files        (abbrev: patch)
+
+	      ck-ignore         : check .gitignore, flag tracked files
+
+	   mkdiff options/parameters:
+
+	      example           : ${SCRIPT_BASENAME} -d [mode] [name tag] [diff options]
+
+	      -c|--cached       : mode to show "staged" changes
+	                 cached : mode to show "staged" changes
+	      -a|all|cumulative : mode to show local and "staged" changes combined
+
+	   pass thru commands:
+	      add, checkout (co), diff (d), pull, push, rm
+
+	   xstatus command:
+
+	      this special command generates an "extended status" for the
+	      given tree; it forces the --verbose option and optionally does
+	      pull/push command for the local working directory (specify -p);
+
+	      if the tree is used to synchronize with a Subversion repository,
+	      then it will include the Subversion status;
+
+	      if the tree is used to merge the given branch with another
+	      stream, then it will include the Subversion mergeinfo as well.
+
+	   .mergeinfo.conf:
+
+	      this configuration file is used in synchronization folders,
+	      which provide a gateway between a remote Subversion repository
+	      and your local git repositories; you can set the HOME_BRANCH
+	      variable here and then use it with the "master" and "home"
+	      commands; e.g.:
+
+	         HOME_BRANCH='mt_integrate'
+
+EOF
+}
+
+show_version()
+{
+cat <<- EOF
+	${SCRIPT_BASENAME}: Git wrapper script, version ${SCRIPT_VERSION}
+EOF
+}
+
+# emit error messages
+barf()
+{
+cat 1>&2 <<- EOF
+	${SCRIPT_BASENAME}: $@
+EOF
+}
+
+# modified barf command
+barf_and_die()
+{
+cat 1>&2 <<- EOF
+	${SCRIPT_BASENAME}: $@
+EOF
+exit 1
+}
+
+bomb()
+{
+   $DEBUG && barf "!BOMB! (exit=$1)"
+   exit $1
+}
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+if [ ! -e $SCRIPT_INCLUDE ]; then
+   barf "can't find required functions '$SCRIPT_INCLUDE'"
+   bomb 9
+fi
+
+. $SCRIPT_INCLUDE
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+unset COMMAND
+
+# parse the arguments and test the result
+_OPTIONS=`getopt -o hvnspd --long help,version,verbose,debug,dry-run,no-colors -n "${SCRIPT_BASENAME}" -- "$@"`
+if [ $? != 0 ] ; then bomb 7 ; fi
+# reset the arguments
+eval set -- "${_OPTIONS}"
+
+while true ; do
+   case "$1" in
+
+      -h|--help)        usage ; bomb 1 ;;
+      --version)        show_version ; bomb 1 ;;
+
+      -v|--verbose)     VERBOSE='true';         shift;         ;;
+      --debug)          DEBUG='true';           shift;         ;;
+      --dry-run)        DRYRUN='true';          shift;         ;;
+
+      -n|--no-colors)   COLORS='false';         shift;         ;;
+
+      -s)               SHORT='true';           shift          ;;
+      -p)               PULLPUSH='true';        shift          ;;
+
+      -d)               COMMAND='mkdiff';       shift          ;;
+
+
+      --)                                       shift;  break  ;;
+      *)                                                break  ;;
+   esac
+done
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+# call the function to initialize the text strings used by this script
+init_text
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+# check to make sure a command has been specified
+
+if [ ${+COMMAND} -eq 0 ]; then
+   if [ $# -eq 0 ]; then
+      if $PULLPUSH; then
+         COMMAND='xstatus'
+      elif $SHORT; then
+         COMMAND='short'
+      else
+         COMMAND='status'
+      fi
+   else
+      COMMAND=${1}
+      shift
+   fi
+fi
+
+# process the command
+
+case ${(L)COMMAND} in
+
+   help)
+      usage
+      bomb 1
+   ;;
+
+   b|branch*)
+      GIT_BRANCHES=$( git branch )
+      GIT_BRANCH_ALL=$(  echo $GIT_BRANCHES | cut -c 3- )
+      GIT_BRANCH_CURR=$( echo $GIT_BRANCHES | grep    '^\*' | sed 's/^\* //'  )
+      GIT_BRANCH_OTHR=$( echo $GIT_BRANCHES | grep -v '^\*' | sed 's/^ \+//'  )
+      if $VERBOSE; then
+         echo $GIT_BRANCH_ALL | while read B;
+         do
+            if [ $B = $GIT_BRANCH_CURR ]; then
+               echo $( colorize_branch $B )
+            else
+               echo $B
+            fi
+         done
+      else
+         barf "current branch is $( colorize_branch $GIT_BRANCH_CURR )"
+      fi
+   ;;
+
+   remotes)
+      git branch -vv
+   ;;
+
+   stat*)
+      git_status
+   ;;
+
+   short)
+      git status --short $@
+   ;;
+
+   # ucommit - this is an "update commit" used to commit changes to Git that
+   # were updated from the corresponding Subversion sync directory
+   uc*)
+      git_um_commit 'update'
+   ;;
+
+   # mcommit - this is a "merge commit" used to commit changes to Git that were
+   # merged from another branch
+   mc*)
+      git_um_commit 'merge'
+   ;;
+
+   # do a pull/push operation
+   pp)
+      git_pull_push
+   ;;
+
+   stash)
+      if [ $# -eq 0 ]; then
+         git stash list
+      else
+         git stash $@
+      fi
+   ;;
+
+   ls)
+      git_get_status
+      case ${1:-all} in
+         mod*)
+            git_get_modified_files
+         ;; 
+         del*)
+            git_get_deleted_files
+         ;;
+         untr*)
+            git_get_untracked_files
+         ;;
+         *)
+            git_get_modified_files_all
+         ;;
+      esac
+   ;;
+
+   lsmod)
+      git_get_status
+      git_get_modified_files
+   ;;
+
+   lsall)
+      git_get_status
+      git_get_modified_files_all
+   ;;
+
+   lsdel)
+      git_get_status
+      git_get_deleted_files
+   ;;
+
+   lsun*)
+      git_get_status
+      git_get_untracked_files
+   ;;
+
+   log)
+      git log --oneline --decorate $@
+   ;;
+
+   graph)
+      git log --pretty=format:"%h%d (%ad)	%s" --graph $@
+   ;;
+
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+   # pass through commands
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+   add)
+      git add $@
+   ;;
+
+   checkout|co)
+      git checkout $@
+   ;;
+
+   d*)
+      git diff
+   ;;
+
+   pull)
+      git pull
+   ;;
+
+   push)
+      git push
+   ;;
+
+   rm)
+      git rm $@
+   ;;
+
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+   # shortcut commands
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+   master)
+      git checkout master
+   ;;
+
+   home)
+      if [ -e .mergeinfo.conf ]; then
+         # read the configuration
+         . ./.mergeinfo.conf
+         # test to make sure the source URL is define
+         if [ ${+HOME_BRANCH} -eq 1 ]; then
+            git checkout $HOME_BRANCH
+         else
+            barf "no home specified"
+         fi
+      else
+         barf "no home specified"
+      fi
+   ;;
+
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+   # special commands
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+   xs*)
+
+      CURRENT_DATE=$(date)
+
+      XSTAT_ARGS=()
+      $VERBOSE && XSTAT_ARGS+=( -v )
+      $COLORS  || XSTAT_ARGS+=( --no-colors )
+
+      # force verbose
+      VERBOSE='true'
+
+      # heading
+      show_section -n "Date: $CURRENT_DATE" -b
+
+      # do a pull/push or just the status if the extra option isn't specified
+      show_section -n "Stat: local working directory"
+      if $PULLPUSH; then
+         git_pull_push
+      else
+         git_status
+      fi
+
+      if [ -e .svn ]; then
+         show_section "Stat: Subversion synchronization"
+         s status $XSTAT_ARGS
+      fi
+
+      if [ -e .mergeinfo.conf ]; then
+         show_section "Stat: Subversion merge"
+         s mergeinfo $XSTAT_ARGS
+      fi
+
+   ;;
+
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+   # helper commands
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+   mkdiff)
+
+      GIT_DIFF_ARGS=()
+      GIT_DIFF_CUMULATIVE='false'
+      GIT_DIFF_TAG=''
+      GIT_DIFF_FILE='diff.txt'
+
+      # check the first parameter to see if a mode has been selected, either
+      # "cached", which gets staged changes or "all" which generates a combined
+      # diff containing all of the cached and local modifications
+
+      case ${1:-NOP} in
+
+         -c|--cached|cached|--staged|staged)
+            GIT_DIFF_ARGS+=( --cached )
+            shift
+         ;;
+
+         -a|all|cumulative)
+            GIT_DIFF_CUMULATIVE='true'
+            shift
+         ;;
+
+         *)
+            # NOP and anything else, do nothing
+         ;;
+
+      esac
+
+      # parse the remaining command line parameter, pass any parameters
+      # (prefixed with a '-' onto) the diff operation and grab the first
+      # parameter that looks like a name tag
+
+      while [ $# -gt 0 ] ; do
+
+         case $1 in
+
+            -*)
+               GIT_DIFF_ARGS+=( $1 )
+               shift
+            ;;
+
+            *)
+               GIT_DIFF_TAG="-$1"
+               GIT_DIFF_FILE="changes-${RUN_DATE}${GIT_DIFF_TAG}.patch"
+               shift
+            ;;
+
+         esac
+
+      done
+
+      git_init_status
+
+      if [ $COMMIT_CNT -gt 0 -o $UNMERGED_CNT -gt 0 -o $MODIFIED_CNT -gt 0 ]; then
+
+         git_get_diff_patch $GIT_DIFF_ARGS               >! ${GIT_DIFF_FILE}
+
+         if $GIT_DIFF_CUMULATIVE ; then
+            git_get_diff_patch --cached $GIT_DIFF_ARGS   >! changes-${RUN_DATE}${GIT_DIFF_TAG}-01-cached.patch
+            mv ${GIT_DIFF_FILE}                             changes-${RUN_DATE}${GIT_DIFF_TAG}-02-local.patch
+            combinediff -q                                                 \
+                  changes-${RUN_DATE}${GIT_DIFF_TAG}-01-cached.patch       \
+                  changes-${RUN_DATE}${GIT_DIFF_TAG}-02-local.patch        \
+               >! changes-${RUN_DATE}${GIT_DIFF_TAG}-03-cumulative.patch
+         fi
+
+      else
+         barf "no changes pending"
+      fi
+
+   ;;
+
+   snap*)
+
+      git_init_status
+
+      if [ $COMMIT_CNT -gt 0 -o $UNMERGED_CNT -gt 0 -o $MODIFIED_CNT -gt 0 ]; then
+         FILE_ROOT="changes-${RUN_DATE}-${@:-WIP}"
+         git_get_diff_patch      > ${FILE_ROOT}.patch
+      else
+         barf "no changes pending"
+      fi
+
+   ;;
+
+   mkpatch|patch)
+
+      git_init_status
+
+      if [ $COMMIT_CNT -gt 0 -o $UNMERGED_CNT -gt 0 -o $MODIFIED_CNT -gt 0 ]; then
+         FILE_ROOT="changes-${RUN_DATE}-${@:-WIP}"
+         git_get_diff_patch      > ${FILE_ROOT}.patch
+         git_get_diff_rev_notes  > ${FILE_ROOT}.txt
+      else
+         barf "no changes pending"
+      fi
+
+   ;;
+
+   ck-ignore)
+      # this showstracked files that are being ignored
+      git ls-files -i --exclude-standard
+   ;;
+
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+   # error
+   # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+   *)
+      barf "command '$COMMAND' unrecognized"
+      bomb 7
+   ;;
+
+esac
+
+
+# vim: syntax=sh
