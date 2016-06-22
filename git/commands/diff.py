@@ -44,5 +44,5 @@ class DiffCommand( scm.Command ):
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-git.register_command( command_name, DiffCommand() )
+git.scm_obj.register_command( command_name, DiffCommand() )
 

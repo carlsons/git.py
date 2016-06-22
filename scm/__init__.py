@@ -163,12 +163,36 @@ class Command( object ):
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+class Scm( object ):
+
+   def __init__( self, name, scm_type, scm_dirname ):
+      self.name            = name
+      self.scm_type        = scm_type
+      self.scm_dirname     = scm_dirname
+      self.commands        = {}
+
+   def register_command( self, command_name, handler ):
+      assert not self.commands.has_key( command_name )
+      self.commands[ command_name ] = handler
+
+   def find_repo_root( self, path ):
+      return find_dir( path, self.is_repo, None );
+
+   def find_repo( self, path=None ):
+      munged_path = Path( path )
+      root = self.find_repo_root( str( munged_path ) )
+      if root:
+         return Repo( self, Path(root) )
+      return None
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 class Repo:
 
-   def __init__( self, scm_type, path ):
-      check_dir_exists( path )
+   def __init__( self, scm_obj, path ):
+      check_dir_exists( str( path ) )
       # set the data members
-      self.scm_type        = scm_type
+      self.scm_obj         = scm_obj
       self.path            = path
       self.cwd             = os.getcwd()
 
@@ -179,8 +203,8 @@ import svn
 
 def find_repos( path=None ):
 
-   g = git.find_repo( path )
-   s = svn.find_repo( path )
+   g = git.scm_obj.find_repo( path )
+   s = svn.scm_obj.find_repo( path )
 
    r = { 'git' : g, 'svn' : s }
 

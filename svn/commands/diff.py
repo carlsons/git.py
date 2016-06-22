@@ -44,5 +44,5 @@ class DiffCommand( scm.Command ):
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-svn.register_command( command_name, DiffCommand() )
+svn.scm_obj.register_command( command_name, DiffCommand() )
 

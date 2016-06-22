@@ -39,6 +39,5 @@ class HelpCommand( scm.Command ):
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-svn.register_command( command_name, HelpCommand() )
-import scm
+svn.scm_obj.register_command( command_name, HelpCommand() )
 

@@ -6,8 +6,9 @@
 
 # print "importing git package"
 
-_Type                = 'git'
-_MetaDir             = '.git'
+_NAME                = 'Git'
+_SCM_TYPE            = 'git'
+_SCM_DIRNAME         = '.git'
 
 import scm
 
@@ -15,30 +16,15 @@ from common import *
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-supported_cmdlist = {}
+class GitScm( scm.Scm ):
 
-def register_command( command_name, handler ):
-   global supported_cmdlist
-   supported_cmdlist[ command_name ] = handler
+   def __init__( self ):
+      super( GitScm, self ).__init__( _NAME, _SCM_TYPE, _SCM_DIRNAME )
 
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-# functions for finding and testing the existence of a Git repo
-
-def is_repo( path=None ):
-   path = munge_dir( path )
-   return has_dir( path, _MetaDir )
-
-def find_repo_root( path=None ):
-   return find_dir( path, is_repo, None );
+   def is_repo( self, path ):
+      return has_dir( path, self.scm_dirname )
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-# TODO: need a derived class for this scm
-
-def find_repo( path=None ):
-   root = find_repo_root( path )
-   if root:
-      return scm.Repo( _Type, root )
-   return None
+scm_obj = GitScm()
 

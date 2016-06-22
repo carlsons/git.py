@@ -39,6 +39,5 @@ class HelpCommand( scm.Command ):
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-git.register_command( command_name, HelpCommand() )
-import scm
+git.scm_obj.register_command( command_name, HelpCommand() )
 

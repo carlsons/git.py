@@ -49,5 +49,5 @@ class StatusCommand( scm.Command ):
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-svn.register_command( command_name, StatusCommand() )
+svn.scm_obj.register_command( command_name, StatusCommand() )
 

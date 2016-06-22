@@ -49,5 +49,5 @@ class StatusCommand( scm.Command ):
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-git.register_command( command_name, StatusCommand() )
+git.scm_obj.register_command( command_name, StatusCommand() )
 
