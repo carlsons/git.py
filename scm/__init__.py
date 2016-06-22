@@ -171,18 +171,21 @@ class Scm( object ):
       self.scm_dirname     = scm_dirname
       self.commands        = {}
 
+   def __str__( self ):
+      return "%s source control manager" % ( self.name )
+
    def register_command( self, command_name, handler ):
       assert not self.commands.has_key( command_name )
       self.commands[ command_name ] = handler
 
    def find_repo_root( self, path ):
-      return find_dir( path, self.is_repo, None );
+      return path.find_dir( self.is_repo );
 
    def find_repo( self, path=None ):
-      munged_path = Path( path )
-      root = self.find_repo_root( str( munged_path ) )
-      if root:
-         return Repo( self, Path(root) )
+      root  = Path( path )
+      found = self.find_repo_root( root )
+      if found:
+         return Repo( self, root )
       return None
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -190,7 +193,7 @@ class Scm( object ):
 class Repo:
 
    def __init__( self, scm_obj, path ):
-      check_dir_exists( str( path ) )
+      assert isinstance( path, Path )
       # set the data members
       self.scm_obj         = scm_obj
       self.path            = path

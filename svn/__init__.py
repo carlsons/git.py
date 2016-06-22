@@ -22,8 +22,8 @@ class SvnScm( scm.Scm ):
       super( SvnScm, self ).__init__( _NAME, _SCM_TYPE, _SCM_DIRNAME )
 
    def is_repo( self, path ):
-      if has_dir( path, self.scm_dirname ):
-         return not has_dir( get_parent_dir( path ), self.scm_dirname )
+      if path.has_dir( self.scm_dirname ):
+         return not path.parent_has_dir( self.scm_dirname )
       return False
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

@@ -22,7 +22,7 @@ class GitScm( scm.Scm ):
       super( GitScm, self ).__init__( _NAME, _SCM_TYPE, _SCM_DIRNAME )
 
    def is_repo( self, path ):
-      return has_dir( path, self.scm_dirname )
+      return path.has_dir( self.scm_dirname )
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
